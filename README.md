@@ -7,9 +7,10 @@ Es löst das Hauptproblem lokaler KI-Agenten: **Der Agent läuft auf dem Host (W
 ## ✨ Features
 
 *   **Zero Dependencies:** Benötigt nur Docker. Kein PHP, kein Make, kein Node auf dem Host nötig.
-*   **Version Match:** Extrahiert die Coding-Guidelines (PHP Architektur, DAL, etc.) direkt aus der *laufenden* Shopware-Instanz im Container.
+*   **Version Match:** Ermittelt die Shopware-Version aus dem Container und lädt die passenden Coding-Guidelines (PHP Architektur, DAL, etc.) direkt von GitHub.
 *   **Docker Bridge:** Generiert Befehle für den Agenten, die automatisch `docker exec` mit der korrekten Container-ID nutzen.
 *   **Cross-Platform:** Funktioniert identisch auf Windows (PowerShell/CMD), macOS und Linux.
+*   **Umfassender Kontext:** Lädt 14 Guideline-Dateien inkl. Decorator Pattern, Unit Tests, Static Analysis, Database Migrations uvm.
 
 ---
 
@@ -112,5 +113,6 @@ Jetzt kannst du einfach `Strg+Shift+P` -> `Run Task` -> `🤖 AI: Update Instruc
 1.  Das Start-Skript (`ai-setup`) startet einen winzigen, temporären Docker-Container (`docker:cli`).
 2.  Dieser Container bekommt Zugriff auf den Docker-Socket des Hosts.
 3.  Das interne Skript (`src/generate.sh`) sucht den laufenden Shopware-Container.
-4.  Es extrahiert via `docker exec` alle `AGENTS.md` Dateien aus dem `vendor/shopware`-Ordner des Shopware-Containers.
-5.  Es kombiniert diese mit den Infrastruktur-Regeln (`src/infrastructure.md`) und schreibt die finale Datei zurück auf deinen Host.
+4.  Es ermittelt die Shopware-Version aus der `composer.lock` im Container.
+5.  Es lädt alle relevanten `AGENTS.md` und Coding-Guideline Dateien von GitHub (passend zur Version oder fallback auf `trunk`).
+6.  Es kombiniert diese mit den Infrastruktur-Regeln (`src/infrastructure.md`) und schreibt die finale Datei zurück auf deinen Host.

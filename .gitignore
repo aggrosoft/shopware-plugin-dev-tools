@@ -1,1 +1,3 @@
 tests/dummy_project/
+.idea/
+.vscode/
