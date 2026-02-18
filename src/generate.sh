@@ -39,7 +39,7 @@ echo "# 🤖 SHOPWARE 6 AI AGENT INSTRUCTIONS" > "$OUTPUT_FILE"
 echo "> **CONTEXT**: Generated via Docker Tooling on $(date -u). Execution rules are strict." >> "$OUTPUT_FILE"
 
 # --- PART 1: INFRASTRUKTUR (Local Rules) ---
-echo -e "\n## 1. 🏗️ INFRASTRUCTURE & EXECUTION (PRIORITY 1)" >> "$OUTPUT_FILE"
+printf "\n## 1. 🏗️ INFRASTRUCTURE & EXECUTION (PRIORITY 1)\n" >> "$OUTPUT_FILE"
 echo "The following commands are tailored to the currently running Docker container ($CONTAINER_ID)." >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
@@ -50,33 +50,117 @@ else
     echo "⚠️ Warning: Infrastructure template not found at $INFRA_TEMPLATE" >> "$OUTPUT_FILE"
 fi
 
-# --- PART 2: SHOPWARE GUIDELINES (Harvested from Container) ---
-echo -e "\n\n---\n\n## 2. 📘 SHOPWARE CODING GUIDELINES" >> "$OUTPUT_FILE"
-echo "These guidelines are extracted directly from the installed Shopware version." >> "$OUTPUT_FILE"
+# --- PART 2: SHOPWARE GUIDELINES (From GitHub) ---
+printf "\n\n---\n\n## 2. 📘 SHOPWARE CODING GUIDELINES\n" >> "$OUTPUT_FILE"
 
-echo "   ... extrahiere Guidelines aus dem Container..."
+echo "   ... ermittle Shopware Version aus Container..."
 
-# Wir führen einen find-Befehl IM Shopware-Container aus
-# 1. Suche alle AGENTS.md unterhalb von vendor/shopware/.../coding-guidelines
-# 2. Iteriere über die Ergebnisse
-docker exec "$CONTAINER_ID" sh -c 'find vendor/shopware -type f -path "*/coding-guidelines/*/AGENTS.md" 2>/dev/null | sort' | while read file; do
+# 1. Definiere den Web-Root im Container (Standard bei Dockware/Shopware)
+WEB_ROOT="/var/www/html"
 
-    # Pfad-Parsing um den Typ zu ermitteln (core, storefront, administration)
-    # Beispiel: vendor/shopware/core/coding-guidelines/core/AGENTS.md -> CORE
-    DOMAIN=$(echo "$file" | sed -E 's/.*coding-guidelines\/([a-z0-9-]+)\/AGENTS.md/\1/' | tr '[:lower:]' '[:upper:]')
+# 2. Shopware Version aus composer.lock ermitteln
+SW_VERSION=$(docker exec -i "$CONTAINER_ID" cat "$WEB_ROOT/composer.lock" 2>/dev/null | grep -A2 '"name": "shopware/core"' | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/' | tr -d '\r')
 
-    echo -e "\n### 2.x $DOMAIN GUIDELINES" >> "$OUTPUT_FILE"
-    echo "> Source: $file" >> "$OUTPUT_FILE"
+if [ -z "$SW_VERSION" ]; then
+    echo "⚠️  WARNUNG: Shopware Version konnte nicht ermittelt werden." >> "$OUTPUT_FILE"
+    SW_VERSION="trunk"  # Fallback auf trunk/main
+fi
+
+echo "   -> Shopware Version: $SW_VERSION"
+echo "These guidelines are from the official Shopware repository (version: $SW_VERSION)." >> "$OUTPUT_FILE"
+
+# 3. GitHub Raw URL Base
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/shopware/shopware"
+
+# Versuche den passenden Branch/Tag zu finden
+# Shopware nutzt Tags wie "v6.6.10.5" aber AGENTS.md existiert nur auf trunk/neueren Tags
+# Wir prüfen ob der Tag die AGENTS.md hat, sonst fallback auf trunk
+echo "   -> Prüfe GitHub Tag $SW_VERSION..."
+TAG_CONTENT=$(wget -qO- "$GITHUB_RAW_BASE/$SW_VERSION/AGENTS.md" 2>/dev/null)
+
+if [ -z "$TAG_CONTENT" ]; then
+    echo "   -> Tag $SW_VERSION hat keine AGENTS.md, nutze 'trunk'"
+    SW_VERSION="trunk"
+fi
+
+GITHUB_RAW="$GITHUB_RAW_BASE/$SW_VERSION"
+
+echo "   ... lade Guidelines von GitHub ($SW_VERSION)..."
+
+# 4. Lade die einzelnen AGENTS.md Dateien direkt (ohne Loop-Probleme)
+SECTION_NUM=0
+
+# --- ROOT AGENTS.md ---
+CONTENT=$(wget -qO- "$GITHUB_RAW/AGENTS.md" 2>/dev/null)
+if [ -n "$CONTENT" ]; then
+    SECTION_NUM=$((SECTION_NUM + 1))
+    printf "\n### 2.%d SHOPWARE ROOT\n" "$SECTION_NUM" >> "$OUTPUT_FILE"
+    echo "> Source: $GITHUB_RAW/AGENTS.md" >> "$OUTPUT_FILE"
     echo "" >> "$OUTPUT_FILE"
+    echo "$CONTENT" >> "$OUTPUT_FILE"
+    printf "\n---\n" >> "$OUTPUT_FILE"
+    echo "   -> Geladen: SHOPWARE ROOT"
+fi
 
-    # Inhalt der Datei aus dem Container lesen und anhängen
-    docker exec "$CONTAINER_ID" cat "$file" >> "$OUTPUT_FILE"
+# --- CODING GUIDELINES CORE INDEX ---
+CONTENT=$(wget -qO- "$GITHUB_RAW/coding-guidelines/core/AGENTS.md" 2>/dev/null)
+if [ -n "$CONTENT" ]; then
+    SECTION_NUM=$((SECTION_NUM + 1))
+    printf "\n### 2.%d CODING GUIDELINES (CORE INDEX)\n" "$SECTION_NUM" >> "$OUTPUT_FILE"
+    echo "> Source: $GITHUB_RAW/coding-guidelines/core/AGENTS.md" >> "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE"
+    echo "$CONTENT" >> "$OUTPUT_FILE"
+    printf "\n---\n" >> "$OUTPUT_FILE"
+    echo "   -> Geladen: CODING GUIDELINES (CORE INDEX)"
+fi
 
-    echo -e "\n---\n" >> "$OUTPUT_FILE"
-done
+# --- CODING GUIDELINES CORE - Detaillierte Dateien ---
+# Feste Liste mit fortlaufender Nummerierung (2.3 bis 2.13)
+echo "   ... lade detaillierte Core Guidelines..."
+
+load_guideline() {
+    filename="$1"
+    title="$2"
+    num="$3"
+    
+    CONTENT=$(wget -qO- "$GITHUB_RAW/coding-guidelines/core/$filename" 2>/dev/null)
+    if [ -n "$CONTENT" ]; then
+        printf "\n### 2.%d %s\n" "$num" "$title" >> "$OUTPUT_FILE"
+        echo "> Source: $GITHUB_RAW/coding-guidelines/core/$filename" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
+        echo "$CONTENT" >> "$OUTPUT_FILE"
+        printf "\n---\n" >> "$OUTPUT_FILE"
+        echo "   -> Geladen: $title"
+    fi
+}
+
+load_guideline "decorator-pattern.md" "Decorator Pattern" 3
+load_guideline "extendability.md" "Extendability" 4
+load_guideline "unit-tests.md" "Unit Tests" 5
+load_guideline "writing-code-for-static-analysis.md" "Static Analysis" 6
+load_guideline "domain-exceptions.md" "Domain Exceptions" 7
+load_guideline "feature-flags.md" "Feature Flags" 8
+load_guideline "database-migations.md" "Database Migrations" 9
+load_guideline "internal.md" "Internal API" 10
+load_guideline "final-and-internal.md" "Final and Internal" 11
+load_guideline "adr.md" "Architecture Decision Records" 12
+load_guideline "6.5-new-php-language-features.md" "PHP 8 Language Features" 13
+
+# --- ADMINISTRATION ---
+CONTENT=$(wget -qO- "$GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md" 2>/dev/null)
+if [ -n "$CONTENT" ]; then
+    printf "\n### 2.14 ADMINISTRATION\n" >> "$OUTPUT_FILE"
+    echo "> Source: $GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md" >> "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE"
+    echo "$CONTENT" >> "$OUTPUT_FILE"
+    printf "\n---\n" >> "$OUTPUT_FILE"
+    echo "   -> Geladen: ADMINISTRATION"
+fi
+
+echo "   -> Alle Guidelines geladen"
 
 # --- PART 3: PROJEKT KONTEXT ---
-echo -e "\n## 3. 🎯 PROJECT SPECIFICS" >> "$OUTPUT_FILE"
+printf "\n## 3. 🎯 PROJECT SPECIFICS\n" >> "$OUTPUT_FILE"
 
 if [ -f "$PROJECT_CONTEXT" ]; then
     cat "$PROJECT_CONTEXT" >> "$OUTPUT_FILE"
