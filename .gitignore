@@ -1,3 +1,4 @@
 tests/dummy_project/
 .idea/
 .vscode/
+AGENT_INSTRUCTIONS.md

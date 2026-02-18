@@ -52,6 +52,30 @@ fetch_url() {
     return 127
 }
 
+append_remote_markdown() {
+    url="$1"
+    heading="$2"
+    source_label="$3"
+    section_number="$4"
+
+    tmp_file="/tmp/ai-guideline-$$.md"
+    if fetch_url "$url" > "$tmp_file"; then
+        if [ -s "$tmp_file" ]; then
+            LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
+            printf "\n### 2.%s %s\n" "$section_number" "$heading" >> "$OUTPUT_FILE"
+            echo "> Source: $source_label" >> "$OUTPUT_FILE"
+            echo "" >> "$OUTPUT_FILE"
+            cat "$tmp_file" >> "$OUTPUT_FILE"
+            printf "\n---\n" >> "$OUTPUT_FILE"
+            rm -f "$tmp_file"
+            return 0
+        fi
+    fi
+
+    rm -f "$tmp_file"
+    return 1
+}
+
 # ------------------------------------------------------------------------------
 # GENERIERUNG STARTEN
 # ------------------------------------------------------------------------------
@@ -81,7 +105,7 @@ echo "   ... ermittle Shopware Version aus Container..."
 WEB_ROOT="/var/www/html"
 
 # 2. Shopware Version aus composer.lock ermitteln
-SW_VERSION=$(docker exec -i "$CONTAINER_ID" cat "$WEB_ROOT/composer.lock" 2>/dev/null | grep -A2 '"name": "shopware/core"' | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/' | tr -d '\r')
+SW_VERSION=$(docker exec "$CONTAINER_ID" cat "$WEB_ROOT/composer.lock" 2>/dev/null | grep -A2 '"name": "shopware/core"' | grep '"version"' | head -1 | sed 's/.*"version": "\([^"]*\)".*/\1/' | tr -d '\r')
 
 if [ -z "$SW_VERSION" ]; then
     echo "⚠️  WARNUNG: Shopware Version konnte nicht ermittelt werden." >> "$OUTPUT_FILE"
@@ -98,12 +122,17 @@ GITHUB_RAW_BASE="https://raw.githubusercontent.com/shopware/shopware"
 # Shopware nutzt Tags wie "v6.6.10.5" aber AGENTS.md existiert nur auf trunk/neueren Tags
 # Wir prüfen ob der Tag die AGENTS.md hat, sonst fallback auf trunk
 echo "   -> Prüfe GitHub Tag $SW_VERSION..."
-TAG_CONTENT=$(fetch_url "$GITHUB_RAW_BASE/$SW_VERSION/AGENTS.md")
-
-if [ -z "$TAG_CONTENT" ]; then
+TAG_CHECK_FILE="/tmp/ai-tag-check-$$.md"
+if fetch_url "$GITHUB_RAW_BASE/$SW_VERSION/AGENTS.md" > "$TAG_CHECK_FILE"; then
+    if [ ! -s "$TAG_CHECK_FILE" ]; then
+        echo "   -> Tag $SW_VERSION hat keine AGENTS.md, nutze 'trunk'"
+        SW_VERSION="trunk"
+    fi
+else
     echo "   -> Tag $SW_VERSION hat keine AGENTS.md, nutze 'trunk'"
     SW_VERSION="trunk"
 fi
+rm -f "$TAG_CHECK_FILE"
 
 GITHUB_RAW="$GITHUB_RAW_BASE/$SW_VERSION"
 
@@ -115,28 +144,14 @@ LOADED_GUIDELINES=0
 SECTION_NUM=0
 
 # --- ROOT AGENTS.md ---
-CONTENT=$(fetch_url "$GITHUB_RAW/AGENTS.md")
-if [ -n "$CONTENT" ]; then
-    LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
-    SECTION_NUM=$((SECTION_NUM + 1))
-    printf "\n### 2.%d SHOPWARE ROOT\n" "$SECTION_NUM" >> "$OUTPUT_FILE"
-    echo "> Source: $GITHUB_RAW/AGENTS.md" >> "$OUTPUT_FILE"
-    echo "" >> "$OUTPUT_FILE"
-    echo "$CONTENT" >> "$OUTPUT_FILE"
-    printf "\n---\n" >> "$OUTPUT_FILE"
+if append_remote_markdown "$GITHUB_RAW/AGENTS.md" "SHOPWARE ROOT" "$GITHUB_RAW/AGENTS.md" "1"; then
+    SECTION_NUM=1
     echo "   -> Geladen: SHOPWARE ROOT"
 fi
 
 # --- CODING GUIDELINES CORE INDEX ---
-CONTENT=$(fetch_url "$GITHUB_RAW/coding-guidelines/core/AGENTS.md")
-if [ -n "$CONTENT" ]; then
-    LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
-    SECTION_NUM=$((SECTION_NUM + 1))
-    printf "\n### 2.%d CODING GUIDELINES (CORE INDEX)\n" "$SECTION_NUM" >> "$OUTPUT_FILE"
-    echo "> Source: $GITHUB_RAW/coding-guidelines/core/AGENTS.md" >> "$OUTPUT_FILE"
-    echo "" >> "$OUTPUT_FILE"
-    echo "$CONTENT" >> "$OUTPUT_FILE"
-    printf "\n---\n" >> "$OUTPUT_FILE"
+if append_remote_markdown "$GITHUB_RAW/coding-guidelines/core/AGENTS.md" "CODING GUIDELINES (CORE INDEX)" "$GITHUB_RAW/coding-guidelines/core/AGENTS.md" "2"; then
+    SECTION_NUM=2
     echo "   -> Geladen: CODING GUIDELINES (CORE INDEX)"
 fi
 
@@ -148,15 +163,8 @@ load_guideline() {
     filename="$1"
     title="$2"
     num="$3"
-    
-    CONTENT=$(fetch_url "$GITHUB_RAW/coding-guidelines/core/$filename")
-    if [ -n "$CONTENT" ]; then
-        LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
-        printf "\n### 2.%d %s\n" "$num" "$title" >> "$OUTPUT_FILE"
-        echo "> Source: $GITHUB_RAW/coding-guidelines/core/$filename" >> "$OUTPUT_FILE"
-        echo "" >> "$OUTPUT_FILE"
-        echo "$CONTENT" >> "$OUTPUT_FILE"
-        printf "\n---\n" >> "$OUTPUT_FILE"
+
+    if append_remote_markdown "$GITHUB_RAW/coding-guidelines/core/$filename" "$title" "$GITHUB_RAW/coding-guidelines/core/$filename" "$num"; then
         echo "   -> Geladen: $title"
     fi
 }
@@ -174,14 +182,7 @@ load_guideline "adr.md" "Architecture Decision Records" 12
 load_guideline "6.5-new-php-language-features.md" "PHP 8 Language Features" 13
 
 # --- ADMINISTRATION ---
-CONTENT=$(fetch_url "$GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md")
-if [ -n "$CONTENT" ]; then
-    LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
-    printf "\n### 2.14 ADMINISTRATION\n" >> "$OUTPUT_FILE"
-    echo "> Source: $GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md" >> "$OUTPUT_FILE"
-    echo "" >> "$OUTPUT_FILE"
-    echo "$CONTENT" >> "$OUTPUT_FILE"
-    printf "\n---\n" >> "$OUTPUT_FILE"
+if append_remote_markdown "$GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md" "ADMINISTRATION" "$GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md" "14"; then
     echo "   -> Geladen: ADMINISTRATION"
 fi
 
