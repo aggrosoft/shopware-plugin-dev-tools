@@ -30,6 +30,28 @@ fi
 echo "✅ [AI-Tool] Ziel-Container gefunden: $CONTAINER_ID"
 echo "🚀 [AI-Tool] Generiere Instruktionen..."
 
+fetch_url() {
+    url="$1"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$url" 2>/dev/null
+        return $?
+    fi
+
+    if command -v wget >/dev/null 2>&1; then
+        wget -qO- "$url" 2>/dev/null
+        status=$?
+        if [ $status -eq 0 ]; then
+            return 0
+        fi
+
+        wget --no-check-certificate -qO- "$url" 2>/dev/null
+        return $?
+    fi
+
+    return 127
+}
+
 # ------------------------------------------------------------------------------
 # GENERIERUNG STARTEN
 # ------------------------------------------------------------------------------
@@ -76,7 +98,7 @@ GITHUB_RAW_BASE="https://raw.githubusercontent.com/shopware/shopware"
 # Shopware nutzt Tags wie "v6.6.10.5" aber AGENTS.md existiert nur auf trunk/neueren Tags
 # Wir prüfen ob der Tag die AGENTS.md hat, sonst fallback auf trunk
 echo "   -> Prüfe GitHub Tag $SW_VERSION..."
-TAG_CONTENT=$(wget -qO- "$GITHUB_RAW_BASE/$SW_VERSION/AGENTS.md" 2>/dev/null)
+TAG_CONTENT=$(fetch_url "$GITHUB_RAW_BASE/$SW_VERSION/AGENTS.md")
 
 if [ -z "$TAG_CONTENT" ]; then
     echo "   -> Tag $SW_VERSION hat keine AGENTS.md, nutze 'trunk'"
@@ -87,12 +109,15 @@ GITHUB_RAW="$GITHUB_RAW_BASE/$SW_VERSION"
 
 echo "   ... lade Guidelines von GitHub ($SW_VERSION)..."
 
+LOADED_GUIDELINES=0
+
 # 4. Lade die einzelnen AGENTS.md Dateien direkt (ohne Loop-Probleme)
 SECTION_NUM=0
 
 # --- ROOT AGENTS.md ---
-CONTENT=$(wget -qO- "$GITHUB_RAW/AGENTS.md" 2>/dev/null)
+CONTENT=$(fetch_url "$GITHUB_RAW/AGENTS.md")
 if [ -n "$CONTENT" ]; then
+    LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
     SECTION_NUM=$((SECTION_NUM + 1))
     printf "\n### 2.%d SHOPWARE ROOT\n" "$SECTION_NUM" >> "$OUTPUT_FILE"
     echo "> Source: $GITHUB_RAW/AGENTS.md" >> "$OUTPUT_FILE"
@@ -103,8 +128,9 @@ if [ -n "$CONTENT" ]; then
 fi
 
 # --- CODING GUIDELINES CORE INDEX ---
-CONTENT=$(wget -qO- "$GITHUB_RAW/coding-guidelines/core/AGENTS.md" 2>/dev/null)
+CONTENT=$(fetch_url "$GITHUB_RAW/coding-guidelines/core/AGENTS.md")
 if [ -n "$CONTENT" ]; then
+    LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
     SECTION_NUM=$((SECTION_NUM + 1))
     printf "\n### 2.%d CODING GUIDELINES (CORE INDEX)\n" "$SECTION_NUM" >> "$OUTPUT_FILE"
     echo "> Source: $GITHUB_RAW/coding-guidelines/core/AGENTS.md" >> "$OUTPUT_FILE"
@@ -123,8 +149,9 @@ load_guideline() {
     title="$2"
     num="$3"
     
-    CONTENT=$(wget -qO- "$GITHUB_RAW/coding-guidelines/core/$filename" 2>/dev/null)
+    CONTENT=$(fetch_url "$GITHUB_RAW/coding-guidelines/core/$filename")
     if [ -n "$CONTENT" ]; then
+        LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
         printf "\n### 2.%d %s\n" "$num" "$title" >> "$OUTPUT_FILE"
         echo "> Source: $GITHUB_RAW/coding-guidelines/core/$filename" >> "$OUTPUT_FILE"
         echo "" >> "$OUTPUT_FILE"
@@ -147,8 +174,9 @@ load_guideline "adr.md" "Architecture Decision Records" 12
 load_guideline "6.5-new-php-language-features.md" "PHP 8 Language Features" 13
 
 # --- ADMINISTRATION ---
-CONTENT=$(wget -qO- "$GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md" 2>/dev/null)
+CONTENT=$(fetch_url "$GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md")
 if [ -n "$CONTENT" ]; then
+    LOADED_GUIDELINES=$((LOADED_GUIDELINES + 1))
     printf "\n### 2.14 ADMINISTRATION\n" >> "$OUTPUT_FILE"
     echo "> Source: $GITHUB_RAW/src/Administration/Resources/app/administration/AGENTS.md" >> "$OUTPUT_FILE"
     echo "" >> "$OUTPUT_FILE"
@@ -158,6 +186,12 @@ if [ -n "$CONTENT" ]; then
 fi
 
 echo "   -> Alle Guidelines geladen"
+
+if [ "$LOADED_GUIDELINES" -eq 0 ]; then
+    echo "⚠️  WARNUNG: Es konnten keine Shopware Guidelines von GitHub geladen werden." >> "$OUTPUT_FILE"
+    echo "⚠️  WARNUNG: Bitte Netzwerk/TLS in Docker pruefen (curl/wget im docker:cli Container)." >> "$OUTPUT_FILE"
+    echo "⚠️ [AI-Tool] Keine Guideline-Dateien geladen. Prüfe Internetzugang/TLS im docker:cli Container."
+fi
 
 # --- PART 3: PROJEKT KONTEXT ---
 printf "\n## 3. 🎯 PROJECT SPECIFICS\n" >> "$OUTPUT_FILE"

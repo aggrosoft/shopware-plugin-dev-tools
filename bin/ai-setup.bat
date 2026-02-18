@@ -15,8 +15,8 @@ docker run --rm ^
    sh -c "sed 's/\r$//' /workdir/.devtools/src/generate.sh | sh -s -- %CONTAINER_NAME%"
 
 IF %ERRORLEVEL% NEQ 0 (
-   echo ❌ Fehler beim Ausfuehren.
+   echo [ERROR] Fehler beim Ausfuehren.
    pause
 ) ELSE (
-   echo ✅ Fertig.
+   echo [OK] Fertig.
 )
