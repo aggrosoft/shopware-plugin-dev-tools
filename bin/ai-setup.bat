@@ -12,7 +12,7 @@ docker run --rm ^
   -v /var/run/docker.sock:/var/run/docker.sock ^
   -v "%CD%":/workdir ^
   docker:cli ^
-  sh /workdir/.devtools/src/generate.sh %CONTAINER_NAME%
+   sh -c "sed 's/\r$//' /workdir/.devtools/src/generate.sh | sh -s -- %CONTAINER_NAME%"
 
 IF %ERRORLEVEL% NEQ 0 (
    echo ❌ Fehler beim Ausfuehren.
