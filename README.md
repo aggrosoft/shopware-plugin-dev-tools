@@ -1,87 +1,120 @@
 # 🤖 Shopware 6 AI Developer Tools
 
-Dieses Repository ist eine Sammlung von **Shared Tools**, um KI-gestützte Entwicklung (mit Cursor, Windsurf, Copilot, etc.) in Shopware 6 Projekten zu standardisieren.
+This repository provides shared tooling to standardize AI-assisted development (Cursor, Windsurf, Copilot, etc.) in Shopware 6 projects.
 
-Es löst das Hauptproblem lokaler KI-Agenten: **Der Agent läuft auf dem Host (Windows/Mac), aber der Code läuft im Docker Container.**
+It solves the core local-agent problem: **the AI agent runs on the host (Windows/macOS/Linux), while your code runs inside Docker containers.**
 
 ## ✨ Features
 
-*   **Zero Dependencies:** Benötigt nur Docker. Kein PHP, kein Make, kein Node auf dem Host nötig.
-*   **Version Match:** Ermittelt die Shopware-Version aus dem Container und lädt die passenden Coding-Guidelines (PHP Architektur, DAL, etc.) direkt von GitHub.
-*   **Docker Bridge:** Generiert Befehle für den Agenten, die automatisch `docker exec` mit der korrekten Container-ID nutzen.
-*   **Cross-Platform:** Funktioniert identisch auf Windows (PowerShell/CMD), macOS und Linux.
-*   **Umfassender Kontext:** Lädt 14 Guideline-Dateien inkl. Decorator Pattern, Unit Tests, Static Analysis, Database Migrations uvm.
+- **Zero host dependencies:** Requires Docker only. No local PHP, Make, Node, or npm needed.
+- **Version-aware guidelines:** Detects the Shopware version from the running container and fetches matching coding guidelines from GitHub.
+- **Docker bridge:** Generates agent instructions that use `docker exec` with the correct container ID.
+- **Cross-platform:** Works on Windows (PowerShell/CMD), macOS, Linux, and Git Bash.
+- **Rich context bundle:** Loads official guideline documents (architecture, DAL, tests, static analysis, migrations, and more).
 
 ---
 
-## 🚀 Installation in einem Plugin
+## 🚀 Quick Start
 
-Füge dieses Repository als **Git Submodule** in dein Shopware-Plugin hinzu. Wir nennen den Ordner `.devtools`, damit er "unsichtbar" bleibt.
+Run from your plugin root.
 
-```bash
-# Im Root deines Plugins ausführen:
-git submodule add git@github.com:DEIN-USER/shopware-ai-devtools.git .devtools
+### Windows (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.ps1 | iex
 ```
 
-Füge folgende Zeilen zu deiner `.gitignore` im Plugin hinzu:
+### macOS / Linux / Git Bash
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.sh | sh
+```
+
+Optional: use a custom container name pattern.
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.ps1))) -ContainerName my-project-web
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.sh | sh -s -- my-project-web
+```
+
+Recommended `.gitignore` entry in your plugin:
 
 ```gitignore
-# .gitignore
-.devtools/
 AGENT_INSTRUCTIONS.md
 ```
 
 ---
 
-## 🛠 Nutzung
+## 🛠 Usage
 
-Sobald das Submodule installiert ist, kannst du die **Agent Instructions** generieren lassen.
+After running the one-liner, the tool generates `AGENT_INSTRUCTIONS.md` in your plugin root.
 
-### 1. Docker Umgebung starten
-Stelle sicher, dass dein Shopware-Container läuft (z.B. via Dockware).
+### 1. Start Docker
 
-### 2. Generator ausführen
+Make sure your Shopware container is running (for example via Dockware).
 
-**Windows:**
-Doppelklick auf `.devtools\bin\ai-setup.bat` oder im Terminal:
+### 2. Run the generator
+
+Remote execution:
+
+```powershell
+irm https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.ps1 | iex
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.sh | sh
+```
+
+Local checkout execution (if you have this repo under `.devtools`):
+
 ```powershell
 .\.devtools\bin\ai-setup.bat
 ```
 
-**Mac / Linux:**
 ```bash
 ./.devtools/bin/ai-setup.sh
 ```
 
-### 3. Ergebnis
-Eine Datei `AGENT_INSTRUCTIONS.md` wird im Root deines Plugins erstellt.
-*   Dein KI-Editor (Cursor/Copilot) liest diese Datei automatisch (wenn du sie als Kontext gibst oder via `.cursorrules`).
-*   Der Agent weiß nun: "Ich darf kein `php` lokal ausführen, ich muss `docker exec -t ... phpunit` nutzen."
+### 3. Result
+
+`AGENT_INSTRUCTIONS.md` will contain container-aware execution rules and Shopware coding context for your AI assistant.
 
 ---
 
-## ⚙️ Konfiguration
+## ⚙️ Configuration
 
-### Container Name anpassen
-Standardmäßig sucht das Skript nach einem Container, der `shopware` im Namen hat. Wenn dein Container anders heißt (z.B. `my-project-web`), übergib den Namen beim Start:
+### Custom container name pattern
 
-```bash
-# Windows
-.\.devtools\bin\ai-setup.bat my-project-web
+By default, the script searches for a running container with `shopware` in its name.
 
-# Mac/Linux
-./.devtools\bin\ai-setup.sh my-project-web
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.ps1))) -ContainerName my-project-web
 ```
 
-### Projekt-Spezifischer Kontext (`PLUGIN_CONTEXT.md`)
-Wenn du dem Agenten spezifische Infos zu *diesem* Plugin geben willst (z.B. "Dies ist ein B2B-Plugin für Kunde X"), erstelle eine Datei `PLUGIN_CONTEXT.md` im Plugin-Root.
-Das Skript hängt den Inhalt dieser Datei automatisch an die generierten Instruktionen an.
+```powershell
+.\.devtools\bin\ai-setup.bat my-project-web
+```
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.sh | sh -s -- my-project-web
+```
+
+```bash
+./.devtools/bin/ai-setup.sh my-project-web
+```
+
+### Project-specific context (`PLUGIN_CONTEXT.md`)
+
+Create `PLUGIN_CONTEXT.md` in your plugin root to inject project-specific notes into the generated instructions.
 
 ---
 
-## ⚡ Pro-Tipp: VS Code Task
+## ⚡ VS Code Task
 
-Damit du den Befehl nicht immer tippen musst, lege dir einen Task in VS Code an. Erstelle oder bearbeite `.vscode/tasks.json` in deinem Plugin:
+To avoid typing commands repeatedly, add this task to your plugin's `.vscode/tasks.json`:
 
 ```json
 {
@@ -90,9 +123,9 @@ Damit du den Befehl nicht immer tippen musst, lege dir einen Task in VS Code an.
     {
       "label": "🤖 AI: Update Instructions",
       "type": "shell",
-      "command": "${workspaceFolder}/.devtools/bin/ai-setup.sh",
+      "command": "curl -fsSL https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.sh | sh",
       "windows": {
-        "command": ".\\.devtools\\bin\\ai-setup.bat"
+        "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"irm https://raw.githubusercontent.com/aggrosoft/shopware-plugin-dev-tools/main/bin/ai-setup.ps1 | iex\""
       },
       "presentation": {
         "reveal": "silent",
@@ -104,15 +137,15 @@ Damit du den Befehl nicht immer tippen musst, lege dir einen Task in VS Code an.
 }
 ```
 
-Jetzt kannst du einfach `Strg+Shift+P` -> `Run Task` -> `🤖 AI: Update Instructions` drücken.
+Then run `Run Task` -> `🤖 AI: Update Instructions`.
 
 ---
 
-## 🏗 Architektur (Wie es funktioniert)
+## 🏗 How It Works
 
-1.  Das Start-Skript (`ai-setup`) startet einen winzigen, temporären Docker-Container (`docker:cli`).
-2.  Dieser Container bekommt Zugriff auf den Docker-Socket des Hosts.
-3.  Das interne Skript (`src/generate.sh`) sucht den laufenden Shopware-Container.
-4.  Es ermittelt die Shopware-Version aus der `composer.lock` im Container.
-5.  Es lädt alle relevanten `AGENTS.md` und Coding-Guideline Dateien von GitHub (passend zur Version oder fallback auf `trunk`).
-6.  Es kombiniert diese mit den Infrastruktur-Regeln (`src/infrastructure.md`) und schreibt die finale Datei zurück auf deinen Host.
+1. `ai-setup` starts a lightweight temporary container (`docker:cli`).
+2. The container gets access to the host Docker socket.
+3. `src/generate.sh` finds the running Shopware container.
+4. It reads the Shopware version from `composer.lock` inside that container.
+5. It fetches relevant `AGENTS.md` and coding guideline files from GitHub (version match, fallback to `trunk`).
+6. It combines everything with infrastructure execution rules (`src/infrastructure.md`) and writes `AGENT_INSTRUCTIONS.md` to your host project.

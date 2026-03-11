@@ -9,8 +9,10 @@ SERVICE_NAME_PATTERN="${1:-shopware}" # Default: suche nach "shopware"
 WORK_DIR="/workdir"                   # Hierhin ist das Plugin gemountet
 OUTPUT_FILE="$WORK_DIR/AGENT_INSTRUCTIONS.md"
 
-# Interne Pfade (Relativ zum Submodule)
-INFRA_TEMPLATE="$WORK_DIR/.devtools/src/infrastructure.md"
+# Interne Pfade (Relativ zum Tooling-Root)
+TOOL_ROOT="${AI_DEVTOOLS_TOOL_ROOT:-$WORK_DIR/.devtools}"
+INFRA_TEMPLATE="$TOOL_ROOT/src/infrastructure.md"
+INFRA_URL="${AI_DEVTOOLS_INFRA_URL:-}"
 PROJECT_CONTEXT="$WORK_DIR/PLUGIN_CONTEXT.md"
 
 echo "🔍 [AI-Tool] Suche Container mit Namensmuster: '$SERVICE_NAME_PATTERN'..."
@@ -93,7 +95,19 @@ if [ -f "$INFRA_TEMPLATE" ]; then
     # Wir injizieren die echte Container ID in das Template
     sed "s/{{CONTAINER_ID}}/$CONTAINER_ID/g" "$INFRA_TEMPLATE" >> "$OUTPUT_FILE"
 else
-    echo "⚠️ Warning: Infrastructure template not found at $INFRA_TEMPLATE" >> "$OUTPUT_FILE"
+    if [ -n "$INFRA_URL" ]; then
+        echo "   -> Lade Infrastructure-Template von $INFRA_URL"
+        TMP_INFRA_FILE="/tmp/ai-infra-$$.md"
+        if fetch_url "$INFRA_URL" > "$TMP_INFRA_FILE" && [ -s "$TMP_INFRA_FILE" ]; then
+            sed "s/{{CONTAINER_ID}}/$CONTAINER_ID/g" "$TMP_INFRA_FILE" >> "$OUTPUT_FILE"
+            rm -f "$TMP_INFRA_FILE"
+        else
+            rm -f "$TMP_INFRA_FILE"
+            echo "⚠️ Warning: Failed to load infrastructure template from $INFRA_URL" >> "$OUTPUT_FILE"
+        fi
+    else
+        echo "⚠️ Warning: Infrastructure template not found at $INFRA_TEMPLATE" >> "$OUTPUT_FILE"
+    fi
 fi
 
 # --- PART 2: SHOPWARE GUIDELINES (From GitHub) ---
